@@ -20,6 +20,7 @@ function App() {
     // Se for uma recuperação de senha, mostra a página de reset
     if (accessToken && type === 'recovery') {
       setShowResetPassword(true);
+      setIsAuthenticated(false);
       setLoading(false);
       return;
     }
@@ -41,8 +42,18 @@ function App() {
       } else if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true);
         setIsAuthenticated(false);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (!showResetPassword) {
+      } else if (event === 'SIGNED_IN') {
+        // Só autentica se não estiver no fluxo de reset de senha
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const isRecovery = hashParams.get('type') === 'recovery';
+        if (!isRecovery) {
+          setIsAuthenticated(!!session);
+        }
+      } else if (event === 'TOKEN_REFRESHED') {
+        // No refresh de token, mantém o estado atual se estiver no reset
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const isRecovery = hashParams.get('type') === 'recovery';
+        if (!isRecovery && !showResetPassword) {
           setIsAuthenticated(!!session);
         }
       } else {
