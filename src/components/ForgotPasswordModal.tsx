@@ -1,4 +1,4 @@
-import { useState } from 'react';import { useState } from 'react';
+import { useState } from 'react';
 import { X, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -26,7 +26,16 @@ export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProp
       setSuccess(true);
     } catch (err: any) {
       console.error('Erro ao enviar email de recuperação:', err);
-      setError(err.message || 'Erro ao enviar email de recuperação. Verifique se o email está correto.');
+
+      let errorMessage = 'Erro ao enviar email de recuperação. Verifique se o email está correto.';
+
+      if (err.message?.includes('rate limit')) {
+        errorMessage = 'Limite de emails atingido. Aguarde alguns minutos antes de tentar novamente.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
