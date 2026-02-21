@@ -47,6 +47,10 @@ export default function ResetPasswordPage({ onSuccess }: ResetPasswordPageProps)
       });
 
       if (error) throw error;
+
+      // Limpa o hash da URL
+      window.history.replaceState(null, '', window.location.pathname);
+
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Erro ao redefinir senha');
