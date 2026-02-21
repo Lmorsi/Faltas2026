@@ -10,42 +10,16 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showRegister, setShowRegister] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [resetLinkError, setResetLinkError] = useState<string | null>(null);
 
   useEffect(() => {
     // Verifica se há um hash de recuperação de senha na URL
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get('access_token');
     const type = hashParams.get('type');
-    const error = hashParams.get('error');
-    const errorCode = hashParams.get('error_code');
-    const errorDescription = hashParams.get('error_description');
 
     console.log('URL Hash:', window.location.hash);
     console.log('Access Token:', accessToken);
     console.log('Type:', type);
-    console.log('Error:', error, errorCode, errorDescription);
-
-    // Verifica se há erro no link de recuperação
-    if (error || errorCode) {
-      let errorMessage = 'Erro ao processar o link de recuperação.';
-
-      if (errorCode === 'otp_expired') {
-        errorMessage = 'Este link de recuperação expirou. Por favor, solicite um novo link.';
-      } else if (errorDescription) {
-        errorMessage = decodeURIComponent(errorDescription.replace(/\+/g, ' '));
-      }
-
-      setResetLinkError(errorMessage);
-      setLoading(false);
-
-      // Limpa o hash da URL após 5 segundos
-      setTimeout(() => {
-        window.history.replaceState(null, '', window.location.pathname);
-      }, 5000);
-
-      return;
-    }
 
     // Se for uma recuperação de senha, mostra a página de reset
     if (accessToken && type === 'recovery') {
@@ -127,30 +101,7 @@ function App() {
 
   return (
     <>
-      {resetLinkError ? (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Link Inválido</h3>
-              <p className="text-sm text-gray-600 mb-6">{resetLinkError}</p>
-              <button
-                onClick={() => {
-                  setResetLinkError(null);
-                  window.history.replaceState(null, '', window.location.pathname);
-                }}
-                className="w-full bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-700 transition-colors"
-              >
-                Voltar para o Login
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : showResetPassword ? (
+      {showResetPassword ? (
         <ResetPasswordPage
           onSuccess={() => {
             setShowResetPassword(false);
