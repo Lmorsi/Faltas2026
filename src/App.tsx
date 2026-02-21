@@ -13,12 +13,15 @@ function App() {
 
   useEffect(() => {
     // Verifica se há um hash de recuperação de senha na URL
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const type = hashParams.get('type');
+    const checkRecovery = () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      return accessToken && type === 'recovery';
+    };
 
     // Se for uma recuperação de senha, mostra a página de reset
-    if (accessToken && type === 'recovery') {
+    if (checkRecovery()) {
       setShowResetPassword(true);
       setIsAuthenticated(false);
       setLoading(false);
@@ -26,13 +29,17 @@ function App() {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
+      if (!checkRecovery()) {
+        setIsAuthenticated(!!session);
+      }
       setLoading(false);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event);
+
       if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
         setShowRegister(false);
@@ -42,22 +49,16 @@ function App() {
       } else if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true);
         setIsAuthenticated(false);
-      } else if (event === 'SIGNED_IN') {
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         // Só autentica se não estiver no fluxo de reset de senha
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const isRecovery = hashParams.get('type') === 'recovery';
-        if (!isRecovery) {
+        if (!checkRecovery()) {
           setIsAuthenticated(!!session);
-        }
-      } else if (event === 'TOKEN_REFRESHED') {
-        // No refresh de token, mantém o estado atual se estiver no reset
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const isRecovery = hashParams.get('type') === 'recovery';
-        if (!isRecovery && !showResetPassword) {
-          setIsAuthenticated(!!session);
+          setShowResetPassword(false);
         }
       } else {
-        setIsAuthenticated(!!session);
+        if (!checkRecovery()) {
+          setIsAuthenticated(!!session);
+        }
       }
     });
 
@@ -104,4 +105,3 @@ function App() {
 }
 
 export default App;
-
