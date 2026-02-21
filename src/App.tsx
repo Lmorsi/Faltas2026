@@ -17,8 +17,13 @@ function App() {
     const accessToken = hashParams.get('access_token');
     const type = hashParams.get('type');
 
+    console.log('URL Hash:', window.location.hash);
+    console.log('Access Token:', accessToken);
+    console.log('Type:', type);
+
     // Se for uma recuperação de senha, mostra a página de reset
     if (accessToken && type === 'recovery') {
+      console.log('Detectado fluxo de recuperação de senha');
       setShowResetPassword(true);
       setIsAuthenticated(false);
       setLoading(false);
@@ -26,13 +31,26 @@ function App() {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
+      console.log('Sessão inicial:', session);
+      // Verifica novamente o hash antes de definir autenticação
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const isRecovery = hashParams.get('type') === 'recovery';
+
+      if (isRecovery) {
+        console.log('Sessão de recovery detectada - não autenticando');
+        setShowResetPassword(true);
+        setIsAuthenticated(false);
+      } else {
+        setIsAuthenticated(!!session);
+      }
       setLoading(false);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session);
+
       if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
         setShowRegister(false);
@@ -40,14 +58,19 @@ function App() {
         localStorage.clear();
         sessionStorage.clear();
       } else if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event');
         setShowResetPassword(true);
         setIsAuthenticated(false);
       } else if (event === 'SIGNED_IN') {
         // Só autentica se não estiver no fluxo de reset de senha
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const isRecovery = hashParams.get('type') === 'recovery';
+        console.log('SIGNED_IN - isRecovery:', isRecovery);
         if (!isRecovery) {
           setIsAuthenticated(!!session);
+        } else {
+          setShowResetPassword(true);
+          setIsAuthenticated(false);
         }
       } else if (event === 'TOKEN_REFRESHED') {
         // No refresh de token, mantém o estado atual se estiver no reset
@@ -57,7 +80,11 @@ function App() {
           setIsAuthenticated(!!session);
         }
       } else {
-        setIsAuthenticated(!!session);
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const isRecovery = hashParams.get('type') === 'recovery';
+        if (!isRecovery) {
+          setIsAuthenticated(!!session);
+        }
       }
     });
 
