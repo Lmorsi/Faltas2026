@@ -15,7 +15,7 @@ function App() {
     // 1. Função para verificar se a URL atual é um link de recuperação
     const isRecoveryURL = () => {
       // O Supabase envia os dados no hash (#) da URL
-      return window.location.hash.includes('type=recovery');
+      return hash.includes('type=recovery') || hash.includes('access_token=');
     };
 
     // 2. Carga inicial: Verifica sessão existente e URL
