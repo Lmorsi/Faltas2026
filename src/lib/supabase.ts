@@ -11,28 +11,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    // DESATIVADO: Impede que o cliente global "roube" o code da URL antes da hora
+    detectSessionInUrl: false, 
     storage: window.localStorage,
     storageKey: 'supabase.auth.token',
     flowType: 'pkce',
   },
 });
 
+// Listener simplificado (Removido lógicas que podem causar loops ou consumos indevidos)
 supabase.auth.onAuthStateChange(async (event, session) => {
-  console.log('Auth event:', event, 'Session:', !!session);
+  console.log('Auth event:', event, 'Session active:', !!session);
 
   if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
     localStorage.clear();
     sessionStorage.clear();
-  }
-
-  if (event === 'TOKEN_REFRESHED' && !session) {
-    localStorage.clear();
-    sessionStorage.clear();
-  }
-
-  if (event === 'SIGNED_IN' && session) {
-    console.log('User signed in:', session.user.email);
   }
 });
 
