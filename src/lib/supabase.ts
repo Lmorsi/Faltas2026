@@ -7,10 +7,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false, // OBRIGATÓRIO: Impede o SDK de queimar o code no load
+    detectSessionInUrl: false, // Mantemos manual
     flowType: 'pkce',
   },
 });
 
-// Log para sabermos quando o arquivo é carregado
-console.log("🚀 Supabase Client Inicializado (detectSessionInUrl: false)");
+// REMOVA o localStorage.clear() daqui de dentro! 
+// Ele estava matando o Code Verifier no momento que o App abria.
+supabase.auth.onAuthStateChange(async (event, session) => {
+  console.log('🔔 Auth Event:', event);
+  // Removido o clear() automático
+});
