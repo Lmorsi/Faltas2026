@@ -11,27 +11,23 @@ function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
 
-  useEffect(() => {
-  // --- BLOCO DE DEBUG ---
-  console.log("=== DEBUG DE AUTENTICAÇÃO ===");
-  console.log("URL Completa:", window.location.href);
-  console.log("Hash da URL:", window.location.hash);
-  const params = new URLSearchParams(window.location.hash.replace('#', '?'));
-  console.log("Tipo detectado no Hash:", params.get('type'));
-  // ----------------------
-
+useEffect(() => {
   const initializeAuth = async () => {
-    // Verificamos se o hash contém as marcas do Supabase para recuperação
-    const hasRecoveryParams = window.location.hash.includes('type=recovery') || 
-                             window.location.hash.includes('error_code=otp_expired');
+    // 1. Pega os parâmetros tanto do Hash quanto da Query String (?)
+    const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+    const queryParams = new URLSearchParams(window.location.search);
+    
+    // 2. Verifica se é um fluxo de recuperação (pelo hash ou pelo código na query)
+    const isRecovery = hashParams.get('type') === 'recovery' || queryParams.has('code');
 
-    if (hasRecoveryParams) {
-      console.log("Fluxo de recuperação detectado via Hash!");
+    if (isRecovery) {
+      console.log("Fluxo de recuperação detectado!");
       setShowResetPassword(true);
       setLoading(false);
       return;
     }
 
+    // 3. Se não for recovery, segue o fluxo normal
     const { data: { session } } = await supabase.auth.getSession();
     setIsAuthenticated(!!session);
     setLoading(false);
@@ -39,12 +35,12 @@ function App() {
 
   initializeAuth();
 
+  // No onAuthStateChange, mantenha o PASSWORD_RECOVERY
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    console.log("Evento Supabase disparado:", event);
-    
     if (event === 'PASSWORD_RECOVERY') {
       setShowResetPassword(true);
       setIsAuthenticated(false);
+    }
       } else if (event === 'SIGNED_IN') {
         // Se for um login normal (sem ser recovery), autentica
         if (!isRecoveryURL()) {
@@ -60,7 +56,7 @@ function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+return () => subscription.unsubscribe();
 }, []);
 
   // Tela de carregamento
