@@ -17,20 +17,31 @@ export default function ResetPasswordPage({ onSuccess }: ResetPasswordPageProps)
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const checkSession = async () => {
-      // Pequeno delay para garantir que o SDK do Supabase processe o code da URL
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        setIsValidSession(true);
-      } else {
-        setError('O link de recuperação expirou ou é inválido.');
-      }
-      setChecking(false);
-    };
+  const handleExchangeCode = async () => {
+    // 1. Extrai o código da URL
+    const queryParams = new URLSearchParams(window.location.search);
+    const code = queryParams.get('code');
 
-    checkSession();
-  }, []);
+    if (code) {
+      console.log("🛠️ Trocando código por sessão...");
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.error("Erro na troca:", error);
+        setError('O link de recuperação expirou ou já foi utilizado.');
+      } else {
+        setIsValidSession(true);
+      }
+    } else {
+      // Fallback para sessões já existentes (Implicit Flow)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) setIsValidSession(true);
+      else setError('Link de recuperação não encontrado na URL.');
+    }
+    setChecking(false);
+  };
+
+  handleExchangeCode();
+}, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
