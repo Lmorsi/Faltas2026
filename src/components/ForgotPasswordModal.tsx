@@ -1,4 +1,22 @@
 import { useState } from 'react';
+import { X, Mail } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+
+type ForgotPasswordModalProps = {
+  onClose: () => void;
+};
+
+export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProps) {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+import { useState } from 'react';
 import { X, Mail, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -18,10 +36,10 @@ export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProp
     setLoading(true);
 
     try {
-      // Usamos a URL de produção fixa para garantir que o redirecionamento
+      // Usamos a URL de produção fixa para garantir que o redirecionamento 
       // do Supabase caia na raiz onde nosso App.tsx processa o fluxo PKCE.
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://faltas2026.vercel.app/',
+        redirectTo: 'https://faltas2026.vercel.app/', 
       });
 
       if (error) throw error;
@@ -49,7 +67,7 @@ export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProp
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-100">
-          <h2 className="text-lg md:text-xl font-bold text-gray-900">Recuperar Senha</h2>
+          <h2 className="text-lg md:text-xl font-bold text-gray-900">Recuperar Senia</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-all"
@@ -67,7 +85,7 @@ export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProp
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Verifique seu e-mail</h3>
               <p className="text-sm text-gray-600 mb-8 leading-relaxed">
-                Enviamos um link de redefinição para <span className="font-semibold text-gray-900">{email}</span>.
+                Enviamos um link de redefinição para <span className="font-semibold text-gray-900">{email}</span>. 
                 O link expira em breve.
               </p>
               <button
