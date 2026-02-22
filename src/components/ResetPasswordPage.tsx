@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type ResetPasswordPageProps = {
@@ -16,40 +16,51 @@ export default function ResetPasswordPage({ onSuccess }: ResetPasswordPageProps)
   const [isValidSession, setIsValidSession] = useState(false);
   const [checking, setChecking] = useState(true);
 
-  // Trava para evitar que o useEffect consuma o código duas vezes (React Strict Mode)
-  const initialized = useRef(false);
+  // useRef é essencial para garantir que a troca só ocorra UMA vez
+  const exchangeAttempted = useRef(false);
 
   useEffect(() => {
     const handleExchangeCode = async () => {
-      // Se já tentamos trocar o código nesta montagem, não faz nada
-      if (initialized.current) return;
-      initialized.current = true;
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      console.log("🔍 Verificando URL por código...");
+
+      if (!code) {
+        console.log("⚠️ Nenhum código encontrado na URL.");
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log("✅ Sessão já ativa encontrada.");
+          setIsValidSession(true);
+        } else {
+          setError('Link de recuperação inválido ou ausente.');
+        }
+        setChecking(false);
+        return;
+      }
+
+      // TRAVA: Se já tentamos nesta sessão do componente, bloqueia a segunda vez
+      if (exchangeAttempted.current) {
+        console.log("🚫 Troca já foi tentada anteriormente nesta montagem.");
+        return;
+      }
+
+      exchangeAttempted.current = true;
+      console.log("🛠️ Iniciando troca manual de código PKCE...");
 
       try {
-        const queryParams = new URLSearchParams(window.location.search);
-        const code = queryParams.get('code');
-
-        if (code) {
-          console.log("🛠️ Tentando troca única de código por sessão...");
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          
-          if (exchangeError) {
-            console.error("Erro na troca:", exchangeError.message);
-            setError('O link de recuperação é inválido ou já foi utilizado.');
-          } else {
-            setIsValidSession(true);
-          }
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        
+        if (exchangeError) {
+          console.error("❌ Erro do Supabase na troca:", exchangeError.message);
+          setError(`Erro: ${exchangeError.message}. Tente solicitar um novo link e abra em aba anônima.`);
         } else {
-          // Fallback para quando o usuário já está logado via fluxo antigo
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            setIsValidSession(true);
-          } else {
-            setError('Link de recuperação não encontrado.');
-          }
+          console.log("🎉 Código trocado por sessão com sucesso!");
+          setIsValidSession(true);
         }
       } catch (err) {
-        setError('Ocorreu um erro ao validar o link.');
+        console.error("💥 Erro inesperado:", err);
+        setError('Erro crítico ao validar o link.');
       } finally {
         setChecking(false);
       }
@@ -60,32 +71,21 @@ export default function ResetPasswordPage({ onSuccess }: ResetPasswordPageProps)
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    if (password !== confirmPassword) {
-      setError('As senhas não coincidem');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres');
-      return;
-    }
+    if (password !== confirmPassword) return setError('As senhas não coincidem');
+    if (password.length < 6) return setError('Mínimo de 6 caracteres');
 
     setLoading(true);
+    setError('');
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: password,
-      });
-
+      const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
 
-      // Limpa a URL e redireciona via App.tsx
+      console.log("✅ Senha atualizada!");
       window.history.replaceState(null, '', window.location.origin);
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Erro ao redefinir senha');
+      setError(err.message || 'Erro ao salvar nova senha');
     } finally {
       setLoading(false);
     }
@@ -94,9 +94,9 @@ export default function ResetPasswordPage({ onSuccess }: ResetPasswordPageProps)
   if (checking) {
     return (
       <div className="min-h-screen bg-[#2B3544] flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600 font-medium">Validando seu acesso...</p>
+        <div className="bg-white rounded-lg p-8 flex items-center gap-3 shadow-xl">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          <p className="text-gray-700 font-medium">Validando link de segurança...</p>
         </div>
       </div>
     );
@@ -104,100 +104,69 @@ export default function ResetPasswordPage({ onSuccess }: ResetPasswordPageProps)
 
   return (
     <div className="min-h-screen bg-[#2B3544] flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl bg-white md:bg-[#404B5C] rounded-lg overflow-hidden shadow-2xl flex">
-        {/* Lado Esquerdo - Informativo */}
-        <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-[#3B5998] to-[#2E5CB8] p-12 flex-col justify-center text-white">
-          <h1 className="text-4xl font-bold mb-4">
-            Sistema de<br />Controle de Faltas
-          </h1>
-          <p className="text-lg mb-8 text-white/90 leading-relaxed">
-            Sua segurança é nossa prioridade. Redefina sua senha para garantir a integridade dos seus dados.
-          </p>
-          <div className="flex items-center gap-3 bg-white/10 p-4 rounded-lg border border-white/20">
-            <Check className="w-6 h-6 text-green-400" />
-            <p className="text-white/90 text-sm">Processo de recuperação seguro e criptografado.</p>
-          </div>
+      <div className="w-full max-w-5xl bg-white rounded-xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
+        <div className="md:w-1/2 bg-slate-800 p-12 text-white flex flex-col justify-center">
+          <h2 className="text-3xl font-bold mb-4">Nova Senha</h2>
+          <p className="text-slate-400">Certifique-se de criar uma senha forte para proteger seu acesso ao sistema.</p>
         </div>
+        
+        <div className="md:w-1/2 p-8 md:p-12">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
 
-        {/* Lado Direito - Formulário */}
-        <div className="w-full md:w-1/2 bg-white p-6 md:p-12 flex flex-col justify-center">
-          <div className="max-w-md mx-auto w-full">
-            <h2 className="text-2xl md:text-3xl font-bold text-[#2B3544] mb-2">Redefinir Senha</h2>
-            <p className="text-gray-500 mb-8">Escolha uma nova senha de acesso.</p>
-
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded text-red-700 text-sm flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                <span>{error}</span>
+          {isValidSession ? (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400">
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
               </div>
-            )}
 
-            {isValidSession ? (
-              <form onSubmit={handleResetPassword} className="space-y-5">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nova Senha</label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Senha</label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-3 text-gray-400">
+                    {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Confirmar Nova Senha</label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repita a senha"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all pr-12"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-[#3D4A5C] hover:bg-[#2B3544] text-white py-3.5 rounded-lg font-bold shadow-lg transition-all transform active:scale-95 disabled:opacity-50"
-                >
-                  {loading ? 'Redefinindo...' : 'Salvar Nova Senha'}
-                </button>
-              </form>
-            ) : (
-              <div className="text-center py-6">
-                <div className="bg-amber-50 text-amber-800 p-4 rounded-lg border border-amber-200 mb-6">
-                  <p className="text-sm">O link expirou. Por favor, solicite uma nova redefinição de senha no sistema.</p>
-                </div>
-                <button
-                  onClick={() => window.location.href = '/'}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-lg font-bold border border-gray-300 transition-colors"
-                >
-                  Voltar ao Login
-                </button>
               </div>
-            )}
-          </div>
+
+              <button
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {loading ? "Salvando..." : "Redefinir Senha"}
+              </button>
+            </form>
+          ) : (
+            <button
+              onClick={() => window.location.href = '/'}
+              className="w-full bg-gray-800 text-white py-3 rounded-lg font-bold"
+            >
+              Voltar ao Login
+            </button>
+          )}
         </div>
       </div>
     </div>
