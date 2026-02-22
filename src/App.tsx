@@ -13,30 +13,27 @@ function App() {
 
   useEffect(() => {
     /**
-     * Helper para detectar se a URL atual contém tokens de recuperação.
-     * Verifica tanto na Query String (?code=) quanto no Hash (#type=recovery).
+     * Helper: Detecta se a URL contém parâmetros de recuperação (PKCE ou Implicit)
      */
     const checkIsRecovery = () => {
-      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
       const queryParams = new URLSearchParams(window.location.search);
-      
-      return (
-        hashParams.get('type') === 'recovery' || 
-        queryParams.has('code') || 
-        window.location.href.includes('reset-password')
-      );
+      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+      return queryParams.has('code') || hashParams.get('type') === 'recovery';
     };
 
+    const isRecoveryFlow = checkIsRecovery();
+
     const initializeAuth = async () => {
-      // 1. Verifica imediatamente se o usuário veio pelo link de e-mail
-      if (checkIsRecovery()) {
-        console.log("🛠️ Fluxo de recuperação detectado na carga inicial.");
+      // 1. PRIORIDADE: Se for um link de recuperação, abre a tela de reset e PARA.
+      // Isso evita que o App.tsx "queime" o token único (code) do Supabase.
+      if (isRecoveryFlow) {
+        console.log("🛠️ Fluxo de recuperação detectado. Aguardando ResetPasswordPage...");
         setShowResetPassword(true);
         setLoading(false);
         return; 
       }
 
-      // 2. Se não for recuperação, verifica sessão normal
+      // 2. Fluxo Normal: Verifica se existe uma sessão ativa
       const { data: { session } } = await supabase.auth.getSession();
       setIsAuthenticated(!!session);
       setLoading(false);
@@ -45,7 +42,7 @@ function App() {
     initializeAuth();
 
     /**
-     * Ouvinte de eventos do Supabase para lidar com mudanças em tempo real
+     * Ouvinte de eventos de autenticação
      */
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔔 Evento de Auth:', event);
@@ -55,8 +52,8 @@ function App() {
         setIsAuthenticated(false);
       } 
       else if (event === 'SIGNED_IN') {
-        // Só redireciona para o Dashboard se NÃO estivermos no fluxo de reset
-        if (!checkIsRecovery()) {
+        // Só entra no Dashboard se não for um retorno de link de senha
+        if (!isRecoveryFlow) {
           setIsAuthenticated(!!session);
           setShowResetPassword(false);
         }
@@ -79,15 +76,15 @@ function App() {
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600 font-medium">Carregando sistema...</p>
+          <p className="text-gray-600 font-medium">Carregando...</p>
         </div>
       </div>
     );
   }
 
-  // --- HIERARQUIA DE RENDERIZAÇÃO ---
+  // --- HIERARQUIA DE TELAS ---
 
-  // 1. Prioridade Total: Reset de Senha
+  // 1. Reset de Senha (Prioridade Máxima)
   if (showResetPassword) {
     return (
       <ResetPasswordPage
@@ -99,7 +96,7 @@ function App() {
     );
   }
 
-  // 2. Dashboard: Usuário Logado
+  // 2. Dashboard (Usuário Autenticado)
   if (isAuthenticated) {
     return (
       <Dashboard 
@@ -110,7 +107,7 @@ function App() {
     );
   }
 
-  // 3. Registro: Tela de Cadastro
+  // 3. Registro
   if (showRegister) {
     return (
       <RegisterPage
@@ -123,7 +120,7 @@ function App() {
     );
   }
 
-  // 4. Default: Tela de Login
+  // 4. Login (Padrão)
   return (
     <LoginPage
       onLoginSuccess={() => setIsAuthenticated(true)}
