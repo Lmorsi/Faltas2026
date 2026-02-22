@@ -12,95 +12,105 @@ function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
-    // Verifica se há um hash de recuperação de senha na URL
-    const checkRecovery = () => {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type');
-      return accessToken && type === 'recovery';
+    // 1. Função para verificar se a URL atual é um link de recuperação
+    const isRecoveryURL = () => {
+      // O Supabase envia os dados no hash (#) da URL
+      return window.location.hash.includes('type=recovery');
     };
 
-    // Se for uma recuperação de senha, mostra a página de reset
-    if (checkRecovery()) {
-      setShowResetPassword(true);
-      setIsAuthenticated(false);
-      setLoading(false);
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!checkRecovery()) {
+    // 2. Carga inicial: Verifica sessão existente e URL
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (isRecoveryURL()) {
+        setShowResetPassword(true);
+      } else {
         setIsAuthenticated(!!session);
       }
       setLoading(false);
-    });
+    };
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state change:', event);
+    initializeAuth();
 
-      if (event === 'SIGNED_OUT') {
-        setIsAuthenticated(false);
-        setShowRegister(false);
-        setShowResetPassword(false);
-        localStorage.clear();
-        sessionStorage.clear();
-      } else if (event === 'PASSWORD_RECOVERY') {
+    // 3. Ouvinte de eventos de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Evento de Auth:', event);
+
+      if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true);
         setIsAuthenticated(false);
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        // Só autentica se não estiver no fluxo de reset de senha
-        if (!checkRecovery()) {
-          setIsAuthenticated(!!session);
+      } else if (event === 'SIGNED_IN') {
+        // Se for um login normal (sem ser recovery), autentica
+        if (!isRecoveryURL()) {
+          setIsAuthenticated(true);
           setShowResetPassword(false);
         }
-      } else {
-        if (!checkRecovery()) {
-          setIsAuthenticated(!!session);
-        }
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+        setShowResetPassword(false);
+        setShowRegister(false);
+        localStorage.clear();
+        sessionStorage.clear();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  // Tela de carregamento
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-600">Carregando...</p>
+        <p className="text-gray-600 font-medium">Carregando...</p>
       </div>
     );
   }
 
+  // --- ORDEM DE RENDERIZAÇÃO (IMPORTANTE) ---
+
+  // 1ª Prioridade: Se estiver no fluxo de reset, NADA mais importa
+  if (showResetPassword) {
+    return (
+      <ResetPasswordPage
+        onSuccess={() => {
+          setShowResetPassword(false);
+          setIsAuthenticated(true); // Após resetar, ele já entra no Dashboard
+        }}
+      />
+    );
+  }
+
+  // 2ª Prioridade: Se estiver autenticado, mostra o Dashboard
+  if (isAuthenticated) {
+    return (
+      <Dashboard 
+        onLogout={() => {
+          setIsAuthenticated(false);
+          supabase.auth.signOut();
+        }} 
+      />
+    );
+  }
+
+  // 3ª Prioridade: Se não estiver logado, alterna entre Login e Registro
+  if (showRegister) {
+    return (
+      <RegisterPage
+        onBack={() => setShowRegister(false)}
+        onRegisterSuccess={() => {
+          setShowRegister(false);
+          setIsAuthenticated(true);
+        }}
+      />
+    );
+  }
+
+  // Padrão: Tela de Login
   return (
-    <>
-      {showResetPassword ? (
-        <ResetPasswordPage
-          onSuccess={() => {
-            setShowResetPassword(false);
-            setIsAuthenticated(true);
-          }}
-        />
-      ) : !isAuthenticated ? (
-        showRegister ? (
-          <RegisterPage
-            onBack={() => setShowRegister(false)}
-            onRegisterSuccess={() => {
-              setShowRegister(false);
-              setIsAuthenticated(true);
-            }}
-          />
-        ) : (
-          <LoginPage
-            onLoginSuccess={() => setIsAuthenticated(true)}
-            onRegisterClick={() => setShowRegister(true)}
-          />
-        )
-      ) : (
-        <Dashboard onLogout={() => setIsAuthenticated(false)} />
-      )}
-    </>
+    <LoginPage
+      onLoginSuccess={() => setIsAuthenticated(true)}
+      onRegisterClick={() => setShowRegister(true)}
+    />
   );
 }
 
