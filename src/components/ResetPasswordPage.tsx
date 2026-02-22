@@ -20,54 +20,24 @@ export default function ResetPasswordPage({ onSuccess }: ResetPasswordPageProps)
   const exchangeAttempted = useRef(false);
 
   useEffect(() => {
-    const handleExchangeCode = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
+  const checkSession = async () => {
+    // No modo implicit, o SDK já processa o fragmento da URL (#) automaticamente
+    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    if (session) {
+      console.log("✅ Sessão de recuperação ativa!");
+      setIsValidSession(true);
+    } else {
+      console.error("❌ Erro ou sessão ausente:", error);
+      setError('Link inválido ou expirado. Solicite um novo e-mail.');
+    }
+    setChecking(false);
+  };
 
-      console.log("🔍 Verificando URL por código...");
-
-      if (!code) {
-        console.log("⚠️ Nenhum código encontrado na URL.");
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          console.log("✅ Sessão já ativa encontrada.");
-          setIsValidSession(true);
-        } else {
-          setError('Link de recuperação inválido ou ausente.');
-        }
-        setChecking(false);
-        return;
-      }
-
-      // TRAVA: Se já tentamos nesta sessão do componente, bloqueia a segunda vez
-      if (exchangeAttempted.current) {
-        console.log("🚫 Troca já foi tentada anteriormente nesta montagem.");
-        return;
-      }
-
-      exchangeAttempted.current = true;
-      console.log("🛠️ Iniciando troca manual de código PKCE...");
-
-      try {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        
-        if (exchangeError) {
-          console.error("❌ Erro do Supabase na troca:", exchangeError.message);
-          setError(`Erro: ${exchangeError.message}. Tente solicitar um novo link e abra em aba anônima.`);
-        } else {
-          console.log("🎉 Código trocado por sessão com sucesso!");
-          setIsValidSession(true);
-        }
-      } catch (err) {
-        console.error("💥 Erro inesperado:", err);
-        setError('Erro crítico ao validar o link.');
-      } finally {
-        setChecking(false);
-      }
-    };
-
-    handleExchangeCode();
-  }, []);
+  // Pequeno delay para garantir que o SDK leu a URL
+  const timer = setTimeout(checkSession, 500);
+  return () => clearTimeout(timer);
+}, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
