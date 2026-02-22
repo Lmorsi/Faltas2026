@@ -11,9 +11,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    // ESSENCIAL: Impede que o SDK tente validar o 'code' automaticamente
-    detectSessionInUrl: false, 
-    flowType: 'pkce',
+    detectSessionInUrl: true, // Deve ser TRUE para o fluxo Implicit capturar o token
+    flowType: 'implicit',     // ALTERADO: De 'pkce' para 'implicit'
   },
 });
 
