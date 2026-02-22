@@ -18,9 +18,9 @@ export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProp
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/`, 
-      });
+const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  redirectTo: 'https://faltas2026.vercel.app/', // Forçando a raiz sem /reset-password
+});
       if (error) throw error;
       setSuccess(true);
     } catch (err: any) {
