@@ -12,30 +12,25 @@ function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
-  const queryParams = new URLSearchParams(window.location.search);
-  const hasCode = queryParams.has('code');
-
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    // SÓ limpa o storage se REALMENTE for um logout e NÃO estivermos tentando recuperar a senha
-    if (event === 'SIGNED_OUT' && !hasCode) {
-      console.log("🧹 Limpando storage após logout seguro.");
-      localStorage.removeItem('supabase.auth.token'); // Remova apenas a chave do supabase, não tudo
-    }
-  });
+    // 1. Função auxiliar para detectar recuperação de senha
+    const checkIsRecovery = () => {
+      const queryParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+      return queryParams.has('code') || hashParams.get('type') === 'recovery';
+    };
 
     const isRecoveryFlow = checkIsRecovery();
 
     const initializeAuth = async () => {
-      // 1. PRIORIDADE: Se for um link de recuperação, abre a tela de reset e PARA.
-      // Isso evita que o App.tsx "queime" o token único (code) do Supabase.
+      // 2. PRIORIDADE: Se for recuperação, não tocamos na sessão agora
       if (isRecoveryFlow) {
-        console.log("🛠️ Fluxo de recuperação detectado. Aguardando ResetPasswordPage...");
+        console.log("🛠️ App: Fluxo de recuperação detectado. Aguardando ResetPasswordPage...");
         setShowResetPassword(true);
         setLoading(false);
-        return; 
+        return;
       }
 
-      // 2. Fluxo Normal: Verifica se existe uma sessão ativa
+      // 3. Fluxo Normal: Verifica sessão ativa
       const { data: { session } } = await supabase.auth.getSession();
       setIsAuthenticated(!!session);
       setLoading(false);
@@ -43,9 +38,7 @@ function App() {
 
     initializeAuth();
 
-    /**
-     * Ouvinte de eventos de autenticação
-     */
+    // 4. Ouvinte de eventos (Unificado para evitar conflitos)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔔 Evento de Auth:', event);
 
@@ -54,7 +47,7 @@ function App() {
         setIsAuthenticated(false);
       } 
       else if (event === 'SIGNED_IN') {
-        // Só entra no Dashboard se não for um retorno de link de senha
+        // Só redireciona para dashboard se não estivermos no meio de um reset
         if (!isRecoveryFlow) {
           setIsAuthenticated(!!session);
           setShowResetPassword(false);
@@ -64,15 +57,15 @@ function App() {
         setIsAuthenticated(false);
         setShowResetPassword(false);
         setShowRegister(false);
-        localStorage.clear();
-        sessionStorage.clear();
+        // IMPORTANTE: Não limpamos o localStorage todo para não matar o verifier do PKCE
+        // O Supabase já limpa os tokens de auth automaticamente no logout
       }
     });
 
     return () => subscription.unsubscribe();
-}, []);
+  }, []);
 
-  // Tela de carregamento inicial
+  // Tela de carregamento
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -86,30 +79,23 @@ function App() {
 
   // --- HIERARQUIA DE TELAS ---
 
-  // 1. Reset de Senha (Prioridade Máxima)
   if (showResetPassword) {
     return (
       <ResetPasswordPage
         onSuccess={() => {
           setShowResetPassword(false);
           setIsAuthenticated(true);
+          // Limpa a URL após o sucesso
+          window.history.replaceState(null, '', window.location.origin);
         }}
       />
     );
   }
 
-  // 2. Dashboard (Usuário Autenticado)
   if (isAuthenticated) {
-    return (
-      <Dashboard 
-        onLogout={() => {
-          setIsAuthenticated(false);
-        }} 
-      />
-    );
+    return <Dashboard onLogout={() => setIsAuthenticated(false)} />;
   }
 
-  // 3. Registro
   if (showRegister) {
     return (
       <RegisterPage
@@ -122,7 +108,6 @@ function App() {
     );
   }
 
-  // 4. Login (Padrão)
   return (
     <LoginPage
       onLoginSuccess={() => setIsAuthenticated(true)}
