@@ -12,14 +12,16 @@ function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
-    /**
-     * Helper: Detecta se a URL contém parâmetros de recuperação (PKCE ou Implicit)
-     */
-    const checkIsRecovery = () => {
-      const queryParams = new URLSearchParams(window.location.search);
-      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
-      return queryParams.has('code') || hashParams.get('type') === 'recovery';
-    };
+  const queryParams = new URLSearchParams(window.location.search);
+  const hasCode = queryParams.has('code');
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    // SÓ limpa o storage se REALMENTE for um logout e NÃO estivermos tentando recuperar a senha
+    if (event === 'SIGNED_OUT' && !hasCode) {
+      console.log("🧹 Limpando storage após logout seguro.");
+      localStorage.removeItem('supabase.auth.token'); // Remova apenas a chave do supabase, não tudo
+    }
+  });
 
     const isRecoveryFlow = checkIsRecovery();
 
@@ -68,7 +70,7 @@ function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+}, []);
 
   // Tela de carregamento inicial
   if (loading) {
