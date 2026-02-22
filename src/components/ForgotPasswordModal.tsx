@@ -1,22 +1,4 @@
 import { useState } from 'react';
-import { X, Mail } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-
-type ForgotPasswordModalProps = {
-  onClose: () => void;
-};
-
-export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProps) {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-import { useState } from 'react';
 import { X, Mail, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
