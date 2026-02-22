@@ -11,43 +11,57 @@ function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
 
-useEffect(() => {
-  const initializeAuth = async () => {
-    // 1. Pega os parâmetros tanto do Hash quanto da Query String (?)
-    const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
-    const queryParams = new URLSearchParams(window.location.search);
-    
-    // 2. Verifica se é um fluxo de recuperação (pelo hash ou pelo código na query)
-    const isRecovery = hashParams.get('type') === 'recovery' || queryParams.has('code');
+  useEffect(() => {
+    /**
+     * Helper para detectar se a URL atual contém tokens de recuperação.
+     * Verifica tanto na Query String (?code=) quanto no Hash (#type=recovery).
+     */
+    const checkIsRecovery = () => {
+      const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+      const queryParams = new URLSearchParams(window.location.search);
+      
+      return (
+        hashParams.get('type') === 'recovery' || 
+        queryParams.has('code') || 
+        window.location.href.includes('reset-password')
+      );
+    };
 
-    if (isRecovery) {
-      console.log("Fluxo de recuperação detectado!");
-      setShowResetPassword(true);
+    const initializeAuth = async () => {
+      // 1. Verifica imediatamente se o usuário veio pelo link de e-mail
+      if (checkIsRecovery()) {
+        console.log("🛠️ Fluxo de recuperação detectado na carga inicial.");
+        setShowResetPassword(true);
+        setLoading(false);
+        return; 
+      }
+
+      // 2. Se não for recuperação, verifica sessão normal
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session);
       setLoading(false);
-      return;
-    }
+    };
 
-    // 3. Se não for recovery, segue o fluxo normal
-    const { data: { session } } = await supabase.auth.getSession();
-    setIsAuthenticated(!!session);
-    setLoading(false);
-  };
+    initializeAuth();
 
-  initializeAuth();
+    /**
+     * Ouvinte de eventos do Supabase para lidar com mudanças em tempo real
+     */
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔔 Evento de Auth:', event);
 
-  // No onAuthStateChange, mantenha o PASSWORD_RECOVERY
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      setShowResetPassword(true);
-      setIsAuthenticated(false);
-    }
-      } else if (event === 'SIGNED_IN') {
-        // Se for um login normal (sem ser recovery), autentica
-        if (!isRecoveryURL()) {
-          setIsAuthenticated(true);
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowResetPassword(true);
+        setIsAuthenticated(false);
+      } 
+      else if (event === 'SIGNED_IN') {
+        // Só redireciona para o Dashboard se NÃO estivermos no fluxo de reset
+        if (!checkIsRecovery()) {
+          setIsAuthenticated(!!session);
           setShowResetPassword(false);
         }
-      } else if (event === 'SIGNED_OUT') {
+      } 
+      else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
         setShowResetPassword(false);
         setShowRegister(false);
@@ -56,45 +70,47 @@ useEffect(() => {
       }
     });
 
-return () => subscription.unsubscribe();
-}, []);
+    return () => subscription.unsubscribe();
+  }, []);
 
-  // Tela de carregamento
+  // Tela de carregamento inicial
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-600 font-medium">Carregando...</p>
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-600 font-medium">Carregando sistema...</p>
+        </div>
       </div>
     );
   }
 
-  // --- ORDEM DE RENDERIZAÇÃO (IMPORTANTE) ---
+  // --- HIERARQUIA DE RENDERIZAÇÃO ---
 
-  // 1ª Prioridade: Se estiver no fluxo de reset, NADA mais importa
+  // 1. Prioridade Total: Reset de Senha
   if (showResetPassword) {
     return (
       <ResetPasswordPage
         onSuccess={() => {
           setShowResetPassword(false);
-          setIsAuthenticated(true); // Após resetar, ele já entra no Dashboard
+          setIsAuthenticated(true);
         }}
       />
     );
   }
 
-  // 2ª Prioridade: Se estiver autenticado, mostra o Dashboard
+  // 2. Dashboard: Usuário Logado
   if (isAuthenticated) {
     return (
       <Dashboard 
         onLogout={() => {
           setIsAuthenticated(false);
-          supabase.auth.signOut();
         }} 
       />
     );
   }
 
-  // 3ª Prioridade: Se não estiver logado, alterna entre Login e Registro
+  // 3. Registro: Tela de Cadastro
   if (showRegister) {
     return (
       <RegisterPage
@@ -107,7 +123,7 @@ return () => subscription.unsubscribe();
     );
   }
 
-  // Padrão: Tela de Login
+  // 4. Default: Tela de Login
   return (
     <LoginPage
       onLoginSuccess={() => setIsAuthenticated(true)}
