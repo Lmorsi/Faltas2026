@@ -7,14 +7,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false, // Mantemos manual
+    detectSessionInUrl: false, // Mantemos manual para o ResetPasswordPage
     flowType: 'pkce',
   },
 });
 
-// REMOVA o localStorage.clear() daqui de dentro! 
-// Ele estava matando o Code Verifier no momento que o App abria.
-supabase.auth.onAuthStateChange(async (event, session) => {
-  console.log('🔔 Auth Event:', event);
-  // Removido o clear() automático
+// REMOVA O localStorage.clear() DAQUI!
+// Ele estava rodando no evento INITIAL_SESSION e apagando o verificador do PKCE.
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('🔔 Evento Global Auth:', event);
 });
