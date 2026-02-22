@@ -12,33 +12,39 @@ function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
-    // 1. Função para verificar se a URL atual é um link de recuperação
-    const isRecoveryURL = () => {
-      // O Supabase envia os dados no hash (#) da URL
-      return hash.includes('type=recovery') || hash.includes('access_token=');
-    };
+  // --- BLOCO DE DEBUG ---
+  console.log("=== DEBUG DE AUTENTICAÇÃO ===");
+  console.log("URL Completa:", window.location.href);
+  console.log("Hash da URL:", window.location.hash);
+  const params = new URLSearchParams(window.location.hash.replace('#', '?'));
+  console.log("Tipo detectado no Hash:", params.get('type'));
+  // ----------------------
 
-    // 2. Carga inicial: Verifica sessão existente e URL
-    const initializeAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (isRecoveryURL()) {
-        setShowResetPassword(true);
-      } else {
-        setIsAuthenticated(!!session);
-      }
+  const initializeAuth = async () => {
+    // Verificamos se o hash contém as marcas do Supabase para recuperação
+    const hasRecoveryParams = window.location.hash.includes('type=recovery') || 
+                             window.location.hash.includes('error_code=otp_expired');
+
+    if (hasRecoveryParams) {
+      console.log("Fluxo de recuperação detectado via Hash!");
+      setShowResetPassword(true);
       setLoading(false);
-    };
+      return;
+    }
 
-    initializeAuth();
+    const { data: { session } } = await supabase.auth.getSession();
+    setIsAuthenticated(!!session);
+    setLoading(false);
+  };
 
-    // 3. Ouvinte de eventos de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Evento de Auth:', event);
+  initializeAuth();
 
-      if (event === 'PASSWORD_RECOVERY') {
-        setShowResetPassword(true);
-        setIsAuthenticated(false);
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    console.log("Evento Supabase disparado:", event);
+    
+    if (event === 'PASSWORD_RECOVERY') {
+      setShowResetPassword(true);
+      setIsAuthenticated(false);
       } else if (event === 'SIGNED_IN') {
         // Se for um login normal (sem ser recovery), autentica
         if (!isRecoveryURL()) {
@@ -55,7 +61,7 @@ function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+}, []);
 
   // Tela de carregamento
   if (loading) {
