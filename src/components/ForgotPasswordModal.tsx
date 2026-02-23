@@ -1,126 +1,114 @@
-import { useState } from 'react';
-import { X, Mail, AlertCircle } from 'lucide-react';
+import { useState } from 'react';import { useState } from 'react';
+import { X, Mail, Loader2, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type ForgotPasswordModalProps = {
+  isOpen: boolean;
   onClose: () => void;
 };
 
-export default function ForgotPasswordModal({ onClose }: ForgotPasswordModalProps) {
+export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProps) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setMessage(null);
 
     try {
-      // Usamos a URL de produção fixa para garantir que o redirecionamento 
-      // do Supabase caia na raiz onde nosso App.tsx processa o fluxo PKCE.
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://faltas2026.vercel.app/', 
+        // ESSENCIAL: Deve ser a mesma URL que está no seu Dashboard do Supabase
+        redirectTo: 'https://faltas2026.vercel.app/',
       });
 
       if (error) throw error;
-      setSuccess(true);
+
+      setMessage({
+        type: 'success',
+        text: 'Link de recuperação enviado! Verifique sua caixa de entrada e spam.'
+      });
+      
+      // Limpa o campo após sucesso
+      setEmail('');
     } catch (err: any) {
-      console.error('Erro ao enviar email de recuperação:', err);
-
-      let errorMessage = 'Não foi possível enviar o email. Verifique o endereço digitado.';
-
-      // Tratamento de Rate Limit (evita spam de emails no Supabase)
-      if (err.message?.includes('rate limit')) {
-        errorMessage = 'Muitas solicitações em pouco tempo. Aguarde alguns minutos.';
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      setError(errorMessage);
+      setMessage({
+        type: 'error',
+        text: err.message || 'Erro ao enviar e-mail de recuperação.'
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-100">
-          <h2 className="text-lg md:text-xl font-bold text-gray-900">Recuperar Senia</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-all"
-            aria-label="Fechar"
-          >
-            <X className="w-5 h-5 md:w-6 md:h-6" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Recuperar Senha</h2>
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
 
-        <div className="p-4 md:p-6">
-          {success ? (
+          {message?.type === 'success' ? (
             <div className="text-center py-4">
-              <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100">
-                <Mail className="w-10 h-10 text-green-600" />
+              <div className="flex justify-center mb-4">
+                <CheckCircle2 className="w-12 h-12 text-green-500" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Verifique seu e-mail</h3>
-              <p className="text-sm text-gray-600 mb-8 leading-relaxed">
-                Enviamos um link de redefinição para <span className="font-semibold text-gray-900">{email}</span>. 
-                O link expira em breve.
-              </p>
+              <p className="text-gray-700 mb-6">{message.text}</p>
               <button
                 onClick={onClose}
-                className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-semibold shadow-md"
+                className="w-full bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-900 transition-all"
               >
-                Entendido
+                Entendi
               </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Insira o e-mail associado à sua conta e enviaremos as instruções para criar uma nova senha.
+              <p className="text-gray-600 text-sm">
+                Insira o seu e-mail cadastrado. Enviaremos um link seguro para você criar uma nova senha.
               </p>
 
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 shrink-0" />
-                  <span>{error}</span>
+              {message?.type === 'error' && (
+                <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg">
+                  {message.text}
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className="block text-xs md:text-sm font-semibold text-gray-700 uppercase tracking-tight">
-                  Endereço de E-mail
-                </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="email"
+                  required
+                  placeholder="seu@email.com"
+                  className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="exemplo@email.com"
-                  className="w-full px-4 py-2.5 text-sm md:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  required
-                  autoFocus
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 px-4 py-2.5 text-gray-600 hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors font-medium text-sm md:text-base"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-                >
-                  {loading ? 'Enviando...' : 'Enviar Link'}
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#3D4A5C] hover:bg-[#2B3544] text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Enviando link...
+                  </>
+                ) : (
+                  'Enviar Link de Recuperação'
+                )}
+              </button>
             </form>
           )}
         </div>
