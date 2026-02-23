@@ -12,25 +12,31 @@ function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
 
   useEffect(() => {
-    // 1. Função auxiliar para detectar recuperação de senha
+    /**
+     * Helper para detectar se a URL atual contém tokens de recuperação.
+     * Verifica tanto na Query String (?code=) quanto no Hash (#type=recovery).
+     */
     const checkIsRecovery = () => {
-      const queryParams = new URLSearchParams(window.location.search);
       const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
-      return queryParams.has('code') || hashParams.get('type') === 'recovery';
+      const queryParams = new URLSearchParams(window.location.search);
+      
+      return (
+        hashParams.get('type') === 'recovery' || 
+        queryParams.has('code') || 
+        window.location.href.includes('reset-password')
+      );
     };
 
-    const isRecoveryFlow = checkIsRecovery();
-
     const initializeAuth = async () => {
-      // 2. PRIORIDADE: Se for recuperação, não tocamos na sessão agora
-      if (isRecoveryFlow) {
-        console.log("🛠️ App: Fluxo de recuperação detectado. Aguardando ResetPasswordPage...");
+      // 1. Verifica imediatamente se o usuário veio pelo link de e-mail
+      if (checkIsRecovery()) {
+        console.log("🛠️ Fluxo de recuperação detectado na carga inicial.");
         setShowResetPassword(true);
         setLoading(false);
-        return;
+        return; 
       }
 
-      // 3. Fluxo Normal: Verifica sessão ativa
+      // 2. Se não for recuperação, verifica sessão normal
       const { data: { session } } = await supabase.auth.getSession();
       setIsAuthenticated(!!session);
       setLoading(false);
@@ -38,7 +44,9 @@ function App() {
 
     initializeAuth();
 
-    // 4. Ouvinte de eventos (Unificado para evitar conflitos)
+    /**
+     * Ouvinte de eventos do Supabase para lidar com mudanças em tempo real
+     */
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔔 Evento de Auth:', event);
 
@@ -47,8 +55,8 @@ function App() {
         setIsAuthenticated(false);
       } 
       else if (event === 'SIGNED_IN') {
-        // Só redireciona para dashboard se não estivermos no meio de um reset
-        if (!isRecoveryFlow) {
+        // Só redireciona para o Dashboard se NÃO estivermos no fluxo de reset
+        if (!checkIsRecovery()) {
           setIsAuthenticated(!!session);
           setShowResetPassword(false);
         }
@@ -57,45 +65,52 @@ function App() {
         setIsAuthenticated(false);
         setShowResetPassword(false);
         setShowRegister(false);
-        // IMPORTANTE: Não limpamos o localStorage todo para não matar o verifier do PKCE
-        // O Supabase já limpa os tokens de auth automaticamente no logout
+        localStorage.clear();
+        sessionStorage.clear();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Tela de carregamento
+  // Tela de carregamento inicial
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600 font-medium">Carregando...</p>
+          <p className="text-gray-600 font-medium">Carregando sistema...</p>
         </div>
       </div>
     );
   }
 
-  // --- HIERARQUIA DE TELAS ---
+  // --- HIERARQUIA DE RENDERIZAÇÃO ---
 
+  // 1. Prioridade Total: Reset de Senha
   if (showResetPassword) {
     return (
       <ResetPasswordPage
         onSuccess={() => {
           setShowResetPassword(false);
           setIsAuthenticated(true);
-          // Limpa a URL após o sucesso
-          window.history.replaceState(null, '', window.location.origin);
         }}
       />
     );
   }
 
+  // 2. Dashboard: Usuário Logado
   if (isAuthenticated) {
-    return <Dashboard onLogout={() => setIsAuthenticated(false)} />;
+    return (
+      <Dashboard 
+        onLogout={() => {
+          setIsAuthenticated(false);
+        }} 
+      />
+    );
   }
 
+  // 3. Registro: Tela de Cadastro
   if (showRegister) {
     return (
       <RegisterPage
@@ -108,6 +123,7 @@ function App() {
     );
   }
 
+  // 4. Default: Tela de Login
   return (
     <LoginPage
       onLoginSuccess={() => setIsAuthenticated(true)}
