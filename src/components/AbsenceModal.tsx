@@ -100,11 +100,24 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
   };
 
   const handleInputChange = (key: keyof AbsenceData, value: string) => {
+    // Permite campo vazio para facilitar digitação
+    if (value === '') {
+      setAbsences({ ...absences, [key]: 0 });
+      return;
+    }
+
     const numValue = parseInt(value) || 0;
-    // Garante que o valor sempre seja >= ao valor anterior
+    setAbsences({ ...absences, [key]: numValue });
+  };
+
+  const handleInputBlur = (key: keyof AbsenceData) => {
+    // Ao sair do campo, garante que o valor seja >= ao valor anterior
+    const currentValue = absences[key];
     const previousValue = lastAbsences ? lastAbsences[key] : 0;
-    const finalValue = Math.max(numValue, previousValue);
-    setAbsences({ ...absences, [key]: finalValue });
+
+    if (currentValue < previousValue) {
+      setAbsences({ ...absences, [key]: previousValue });
+    }
   };
 
   const getDifference = (current: number, previous: number | undefined) => {
@@ -226,13 +239,14 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
                     <div className="relative">
                       <input
                         type="number"
-                        min={lastValue}
+                        inputMode="numeric"
                         placeholder={lastValue.toString()}
-                        value={currentValue || ''}
+                        value={currentValue === 0 ? '' : currentValue}
                         onChange={(e) =>
                           handleInputChange(discipline.key as keyof AbsenceData, e.target.value)
                         }
-                        className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent ${
+                        onBlur={() => handleInputBlur(discipline.key as keyof AbsenceData)}
+                        className={`w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent ${
                           difference !== null ? 'pr-16' : ''
                         }`}
                       />
