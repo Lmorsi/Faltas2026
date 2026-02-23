@@ -23,6 +23,7 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
     setLoading(true);
 
     try {
+      // Limpa sessões antigas para evitar conflitos de cache
       const { data: currentSession } = await supabase.auth.getSession();
       if (currentSession.session) {
         await supabase.auth.signOut();
@@ -36,15 +37,11 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
           throw new Error('Email ou senha inválidos. Verifique suas credenciais.');
-        } else if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
-          throw new Error('Por favor, confirme seu email antes de fazer login. Verifique sua caixa de entrada (e spam).');
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error('Por favor, confirme seu email antes de fazer login.');
         } else {
           throw error;
         }
-      }
-
-      if (!data.session) {
-        throw new Error('Não foi possível criar uma sessão. Por favor, verifique se seu email foi confirmado.');
       }
 
       if (data.session) {
@@ -61,12 +58,13 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
   return (
     <div className="min-h-screen bg-[#2B3544] flex items-center justify-center p-4">
       <div className="w-full max-w-6xl bg-white md:bg-[#404B5C] rounded-lg overflow-hidden shadow-2xl flex">
+        {/* Lado Esquerdo - Info */}
         <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-[#3B5998] to-[#2E5CB8] p-12 flex-col justify-center text-white">
           <h1 className="text-4xl font-bold mb-4">
             Sistema Educacional de<br />Controle de Faltas
           </h1>
           <p className="text-lg mb-8 text-white/90">
-            Gerencie a frequência dos alunos de forma eficiente<br />e organizada.
+            Gerencie a frequência dos alunos de forma eficiente e organizada.
           </p>
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
@@ -76,6 +74,7 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
           </div>
         </div>
 
+        {/* Lado Direito - Form */}
         <div className="w-full md:w-1/2 bg-white p-6 md:p-12 flex flex-col justify-center">
           <div className="max-w-md mx-auto w-full">
             <h2 className="text-2xl md:text-3xl font-bold text-[#2B3544] mb-2">Controle de Faltas</h2>
@@ -138,7 +137,7 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
                 <button
                   type="button"
                   onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-gray-700 hover:text-gray-900"
+                  className="text-sm text-[#3B5998] font-medium hover:underline"
                 >
                   Esqueceu a senha?
                 </button>
@@ -153,7 +152,7 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
               </button>
 
               <div className="mt-6 text-center">
-                <span className="text-gray-500">ou</span>
+                <span className="text-gray-500 text-sm">ou</span>
               </div>
 
               <div className="mt-4 text-center text-sm">
@@ -161,7 +160,7 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
                 <button
                   type="button"
                   onClick={onRegisterClick}
-                  className="text-gray-900 font-medium hover:underline"
+                  className="text-[#3B5998] font-bold hover:underline"
                 >
                   Criar conta
                 </button>
@@ -171,9 +170,11 @@ export default function LoginPage({ onLoginSuccess, onRegisterClick }: LoginPage
         </div>
       </div>
 
-      {showForgotPassword && (
-        <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
-      )}
+      {/* MODAL CORRIGIDO: Passando isOpen e onClose corretamente */}
+      <ForgotPasswordModal 
+        isOpen={showForgotPassword} 
+        onClose={() => setShowForgotPassword(false)} 
+      />
     </div>
   );
 }
