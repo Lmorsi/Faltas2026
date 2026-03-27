@@ -89,7 +89,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   };
 
-  // 2. Função de Logout Sincronizada com o App.tsx
+  // 2. Função de Logout Sincronizada com o App.tsx 
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -120,10 +120,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const sortedStudents = [...filteredStudents].sort((a, b) => {
     switch (sortBy) {
       case 'nome': return a.nome_completo.localeCompare(b.nome_completo);
-      case 'serie': 
+      case 'serie':
         return a.ano.localeCompare(b.ano) || a.turma.localeCompare(b.turma);
       case 'faltas': return b.total_faltas - a.total_faltas;
-      case 'status': return (b.total_faltas >= 5 ? 1 : 0) - (a.total_faltas >= 5 ? 1 : 0);
+      case 'status': {
+        const getPriority = (faltas: number) => {
+          if (faltas >= 180) return 3;
+          if (faltas >= 101) return 2;
+          return 1;
+        };
+        return getPriority(b.total_faltas) - getPriority(a.total_faltas);
+      }
       default: return 0;
     }
   });
@@ -248,15 +255,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 <FilterInput label="Filtrar Série/Turma" placeholder="Ex: 8º A..." value={filterSerie} onChange={setFilterSerie} />
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Ordenar por</label>
-                  <select 
-                    value={sortBy} 
+                  <select
+                    value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                     className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="nome">Nome (A-Z)</option>
                     <option value="serie">Série e Turma</option>
                     <option value="faltas">Mais Faltas</option>
-                    <option value="status">Status Crítico</option>
+                    <option value="status">Por Status (Crítico → Atenção → Regular)</option>
                   </select>
                 </div>
               </div>
