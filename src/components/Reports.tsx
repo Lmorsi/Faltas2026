@@ -71,9 +71,22 @@ export default function Reports() {
 
     if (serieTurmaFilter) {
       filtered = filtered.filter((s) => {
-        const numero = s.ano.match(/\d+/)?.[0] || s.ano;
-        const serieTurma = `${numero}${s.turma}`;
-        return serieTurma.toLowerCase().includes(serieTurmaFilter.toLowerCase());
+        const searchTerm = serieTurmaFilter.toLowerCase().trim();
+        const numero = s.ano.match(/\d+/)?.[0] || '';
+        const turma = s.turma.toLowerCase();
+
+        // Formatos possíveis: "6A", "6 A", "6º A", "6", "A"
+        const serieTurmaCompact = `${numero}${turma}`;
+        const serieTurmaWithSpace = `${numero} ${turma}`;
+        const serieTurmaWithDegree = `${numero}º ${turma}`;
+        const serieTurmaWithDegreeCompact = `${numero}º${turma}`;
+
+        return serieTurmaCompact.includes(searchTerm) ||
+               serieTurmaWithSpace.includes(searchTerm) ||
+               serieTurmaWithDegree.includes(searchTerm) ||
+               serieTurmaWithDegreeCompact.includes(searchTerm) ||
+               numero.includes(searchTerm) ||
+               turma.includes(searchTerm);
       });
     }
 
