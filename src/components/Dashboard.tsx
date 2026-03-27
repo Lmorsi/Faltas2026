@@ -89,7 +89,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   };
 
-  // 2. Função de Logout Sincronizada com o App.tsx 
+  // 2. Função de Logout Sincronizada com o App.tsx
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -111,9 +111,27 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const filteredStudents = students.filter(student => {
     const matchesSearch = student.nome_completo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSerie = !filterSerie || 
-      student.ano.toLowerCase().includes(filterSerie.toLowerCase()) ||
-      student.turma.toLowerCase().includes(filterSerie.toLowerCase());
+
+    let matchesSerie = true;
+    if (filterSerie) {
+      const searchTerm = filterSerie.toLowerCase().trim();
+      const numero = student.ano.match(/\d+/)?.[0] || '';
+      const turma = student.turma.toLowerCase();
+
+      // Formatos possíveis: "6A", "6 A", "6º A", "6", "A"
+      const serieTurmaCompact = `${numero}${turma}`;
+      const serieTurmaWithSpace = `${numero} ${turma}`;
+      const serieTurmaWithDegree = `${numero}º ${turma}`;
+      const serieTurmaWithDegreeCompact = `${numero}º${turma}`;
+
+      matchesSerie = serieTurmaCompact.includes(searchTerm) ||
+                     serieTurmaWithSpace.includes(searchTerm) ||
+                     serieTurmaWithDegree.includes(searchTerm) ||
+                     serieTurmaWithDegreeCompact.includes(searchTerm) ||
+                     numero.includes(searchTerm) ||
+                     turma.includes(searchTerm);
+    }
+
     return matchesSearch && matchesSerie;
   });
 
