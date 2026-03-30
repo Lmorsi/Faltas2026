@@ -59,12 +59,17 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
     pd3: 0,
   });
   const [lastAbsences, setLastAbsences] = useState<AbsenceData | null>(null);
+  const [todayAbsences, setTodayAbsences] = useState<AbsenceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadAbsences();
   }, [studentId]);
+
+  useEffect(() => {
+    loadAbsencesForDate(dataFalta);
+  }, [dataFalta, studentId]);
 
   const loadAbsences = async () => {
     try {
@@ -93,7 +98,6 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
           pd3: lastRecord.pd3,
         };
         setLastAbsences(previousAbsences);
-        // Inicializa com os valores da última contagem
         setAbsences(previousAbsences);
       }
     } catch (error) {
@@ -103,17 +107,56 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
     }
   };
 
+  const loadAbsencesForDate = async (date: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('absences')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('data_falta', date)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const todayRecord = data[0];
+        const todayData = {
+          matematica: todayRecord.matematica,
+          lingua_portuguesa: todayRecord.lingua_portuguesa,
+          ciencias: todayRecord.ciencias || 0,
+          historia: todayRecord.historia,
+          geografia: todayRecord.geografia,
+          arte: todayRecord.arte,
+          lem: todayRecord.lem,
+          educacao_fisica: todayRecord.educacao_fisica,
+          pd1: todayRecord.pd1,
+          pd2: todayRecord.pd2,
+          pd3: todayRecord.pd3,
+        };
+        setTodayAbsences(todayData);
+        setAbsences(todayData);
+      } else {
+        setTodayAbsences(null);
+        if (lastAbsences) {
+          setAbsences(lastAbsences);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading absences for date:', error);
+    }
+  };
+
   const handleInputChange = (key: keyof AbsenceData, value: string) => {
     const numValue = parseInt(value) || 0;
-    // Garante que o valor sempre seja >= ao valor anterior
-    const previousValue = lastAbsences ? lastAbsences[key] : 0;
-    const finalValue = Math.max(numValue, previousValue);
+    const baseValue = todayAbsences ? todayAbsences[key] : (lastAbsences ? lastAbsences[key] : 0);
+    const finalValue = Math.max(numValue, baseValue);
     setAbsences({ ...absences, [key]: finalValue });
   };
 
-  const getDifference = (current: number, previous: number | undefined) => {
-    if (previous === undefined) return null;
-    const diff = current - previous;
+  const getDifference = (current: number, base: number | undefined) => {
+    if (base === undefined) return null;
+    const diff = current - base;
     return diff > 0 ? diff : null;
   };
 
@@ -125,7 +168,6 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // absences já contém o total acumulado atual
       const newAbsences = { ...absences };
 
       const { error: insertError } = await supabase.from('absences').insert([
@@ -162,10 +204,11 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
   };
 
   const currentTotal = Object.values(absences).reduce((sum, val) => sum + val, 0);
-  const lastTotal = lastAbsences
-    ? Object.values(lastAbsences).reduce((sum, val) => sum + val, 0)
+  const baseAbsences = todayAbsences || lastAbsences;
+  const baseTotal = baseAbsences
+    ? Object.values(baseAbsences).reduce((sum, val) => sum + val, 0)
     : 0;
-  const periodAbsences = currentTotal - lastTotal;
+  const periodAbsences = currentTotal - baseTotal;
 
   if (loading) {
     return (
@@ -203,39 +246,56 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
               type="date"
               value={dataFalta}
               onChange={(e) => setDataFalta(e.target.value)}
+              min={today}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent"
               required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Apenas datas de hoje em diante podem ser registradas
+            </p>
           </div>
+
+          {todayAbsences && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800 font-medium">
+                Existem registros anteriores para esta data. Os valores abaixo refletem o último salvamento.
+              </p>
+            </div>
+          )}
 
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Contagem Atual de Faltas por Disciplina
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              Digite o total acumulado atual. O sistema calculará automaticamente as faltas no período.
+              {todayAbsences
+                ? 'Atualize os valores para somar mais faltas nesta data.'
+                : 'Digite o total acumulado atual. O sistema calculará automaticamente as faltas no período.'
+              }
             </p>
             <div className="grid grid-cols-2 gap-4">
               {DISCIPLINES.map((discipline) => {
                 const currentValue = absences[discipline.key as keyof AbsenceData];
-                const lastValue = lastAbsences
-                  ? lastAbsences[discipline.key as keyof AbsenceData]
+                const baseValue = baseAbsences
+                  ? baseAbsences[discipline.key as keyof AbsenceData]
                   : 0;
-                const difference = getDifference(currentValue, lastValue);
+                const difference = getDifference(currentValue, baseValue);
 
                 return (
                   <div key={discipline.key}>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {discipline.label}
-                      {lastValue > 0 && (
-                        <span className="ml-2 text-xs text-gray-500">(anterior: {lastValue})</span>
+                      {baseValue > 0 && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          ({todayAbsences ? 'atual' : 'anterior'}: {baseValue})
+                        </span>
                       )}
                     </label>
                     <div className="relative">
                       <input
                         type="number"
-                        min={lastValue}
-                        placeholder={lastValue.toString()}
+                        min={baseValue}
+                        placeholder={baseValue.toString()}
                         value={currentValue || ''}
                         onChange={(e) =>
                           handleInputChange(discipline.key as keyof AbsenceData, e.target.value)
@@ -264,15 +324,15 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
                 <span className="text-lg font-bold">{currentTotal}</span>
               </p>
             </div>
-            {lastAbsences && (
+            {baseAbsences && (
               <div className="space-y-1">
                 <p className="text-xs text-blue-700">
-                  Contagem anterior: {lastTotal} faltas
+                  {todayAbsences ? 'Contagem atual da data' : 'Contagem anterior'}: {baseTotal} faltas
                 </p>
                 {periodAbsences > 0 && (
                   <p className="text-sm font-semibold text-green-700 flex items-center gap-1">
                     <ArrowUp className="w-4 h-4" />
-                    Faltas no período: +{periodAbsences}
+                    Faltas sendo adicionadas: +{periodAbsences}
                   </p>
                 )}
               </div>
