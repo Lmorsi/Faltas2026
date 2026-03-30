@@ -21,6 +21,7 @@ type AbsenceRecord = {
   data_falta: string;
   matematica: number;
   lingua_portuguesa: number;
+  ciencias: number;
   historia: number;
   geografia: number;
   arte: number;
@@ -34,6 +35,7 @@ type AbsenceRecord = {
 const DISCIPLINE_LABELS: Record<string, string> = {
   matematica: 'Matemática',
   lingua_portuguesa: 'Língua Portuguesa',
+  ciencias: 'Ciências',
   historia: 'História',
   geografia: 'Geografia',
   arte: 'Arte',
