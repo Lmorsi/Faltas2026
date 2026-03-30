@@ -12,6 +12,7 @@ type AbsenceModalProps = {
 type AbsenceData = {
   matematica: number;
   lingua_portuguesa: number;
+  ciencias: number;
   historia: number;
   geografia: number;
   arte: number;
@@ -30,6 +31,7 @@ type AbsenceRecord = AbsenceData & {
 const DISCIPLINES = [
   { key: 'matematica', label: 'Matemática' },
   { key: 'lingua_portuguesa', label: 'Língua Portuguesa' },
+  { key: 'ciencias', label: 'Ciências' },
   { key: 'historia', label: 'História' },
   { key: 'geografia', label: 'Geografia' },
   { key: 'arte', label: 'Arte' },
@@ -46,6 +48,7 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
   const [absences, setAbsences] = useState<AbsenceData>({
     matematica: 0,
     lingua_portuguesa: 0,
+    ciencias: 0,
     historia: 0,
     geografia: 0,
     arte: 0,
@@ -79,6 +82,7 @@ export default function AbsenceModal({ studentId, studentName, onClose, onSave }
         const previousAbsences = {
           matematica: lastRecord.matematica,
           lingua_portuguesa: lastRecord.lingua_portuguesa,
+          ciencias: lastRecord.ciencias || 0,
           historia: lastRecord.historia,
           geografia: lastRecord.geografia,
           arte: lastRecord.arte,
