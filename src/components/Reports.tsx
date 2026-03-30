@@ -8,6 +8,7 @@ export default function Reports() {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [nameFilter, setNameFilter] = useState('');
   const [serieTurmaFilter, setSerieTurmaFilter] = useState('');
+  const [sortBy, setSortBy] = useState('nome');
   const [loading, setLoading] = useState(true);
   const [lastAbsenceDates, setLastAbsenceDates] = useState<Record<string, string>>({});
   const [detailsStudent, setDetailsStudent] = useState<Student | null>(null);
@@ -19,7 +20,7 @@ export default function Reports() {
 
   useEffect(() => {
     filterStudents();
-  }, [students, nameFilter, serieTurmaFilter]);
+  }, [students, nameFilter, serieTurmaFilter, sortBy]);
 
   const loadStudents = async () => {
     try {
@@ -90,7 +91,25 @@ export default function Reports() {
       });
     }
 
-    setFilteredStudents(filtered);
+    // Aplicar ordenação
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'nome':
+          return a.nome_completo.localeCompare(b.nome_completo);
+        case 'serie': {
+          const aNumero = parseInt(a.ano.match(/\d+/)?.[0] || '0');
+          const bNumero = parseInt(b.ano.match(/\d+/)?.[0] || '0');
+          if (aNumero !== bNumero) return aNumero - bNumero;
+          return a.turma.localeCompare(b.turma);
+        }
+        case 'faltas':
+          return b.total_faltas - a.total_faltas;
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredStudents(sorted);
   };
 
   const formatSeriesTurma = (ano: string, turma: string) => {
@@ -139,15 +158,53 @@ export default function Reports() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Relatórios e Consultas</h1>
-        <p className="text-sm sm:text-base text-gray-600">Busque e analise dados de frequência dos estudantes</p>
-      </div>
+    <>
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-area,
+          #printable-area * {
+            visibility: visible;
+          }
+          #printable-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-simple {
+            font-size: 12px;
+          }
+          .print-simple table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .print-simple th,
+          .print-simple td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+          }
+          .print-simple th {
+            background-color: #f3f4f6;
+            font-weight: bold;
+          }
+        }
+      `}</style>
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 sm:mb-8 no-print">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Relatórios e Consultas</h1>
+          <p className="text-sm sm:text-base text-gray-600">Busque e analise dados de frequência dos estudantes</p>
+        </div>
 
-      <div className="bg-white rounded-lg shadow mb-6 p-4 sm:p-6">
+      <div className="bg-white rounded-lg shadow mb-6 p-4 sm:p-6 no-print">
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Filtros de Busca</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               Nome do Estudante
@@ -172,11 +229,25 @@ export default function Reports() {
               className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent"
             />
           </div>
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+              Ordenar por
+            </label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent"
+            >
+              <option value="nome">Nome (A-Z)</option>
+              <option value="serie">Série e Turma</option>
+              <option value="faltas">Mais Faltas</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-4 sm:p-6 border-b border-gray-200">
+      <div id="printable-area" className="bg-white rounded-lg shadow">
+        <div className="p-4 sm:p-6 border-b border-gray-200 no-print">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h2 className="text-base sm:text-lg font-semibold text-gray-900">Resultados da Busca</h2>
             <div className="flex items-center gap-2 sm:gap-3">
@@ -200,7 +271,7 @@ export default function Reports() {
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-4 sm:p-6 print-simple">
           {loading ? (
             <div className="text-center py-12">
               <p className="text-gray-500 text-sm sm:text-base">Carregando...</p>
@@ -224,13 +295,13 @@ export default function Reports() {
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">
                         Total Faltas
                       </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 no-print">
                         Detalhes
                       </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 no-print">
                         Status
                       </th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 no-print">
                         Última Falta
                       </th>
                     </tr>
@@ -247,7 +318,7 @@ export default function Reports() {
                         <td className="py-3 px-4 text-sm text-gray-700">
                           {student.total_faltas}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 no-print">
                           <button
                             onClick={() => handleDetailsClick(student)}
                             className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
@@ -256,14 +327,14 @@ export default function Reports() {
                             Ver detalhes
                           </button>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 no-print">
                           <span
                             className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(getStudentStatus(student.total_faltas))}`}
                           >
                             {getStudentStatus(student.total_faltas)}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-sm text-gray-700">
+                        <td className="py-3 px-4 text-sm text-gray-700 no-print">
                           {formatDate(lastAbsenceDates[student.id] || '')}
                         </td>
                       </tr>
@@ -272,7 +343,7 @@ export default function Reports() {
                 </table>
               </div>
 
-              <div className="md:hidden space-y-3">
+              <div className="md:hidden space-y-3 no-print">
                 {filteredStudents.map((student) => (
                   <div
                     key={student.id}
@@ -328,5 +399,6 @@ export default function Reports() {
         />
       )}
     </div>
+    </>
   );
 }
