@@ -137,10 +137,16 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const sortedStudents = [...filteredStudents].sort((a, b) => {
     switch (sortBy) {
-      case 'nome': return a.nome_completo.localeCompare(b.nome_completo);
-      case 'serie':
-        return a.ano.localeCompare(b.ano) || a.turma.localeCompare(b.turma);
-      case 'faltas': return b.total_faltas - a.total_faltas;
+      case 'nome':
+        return a.nome_completo.localeCompare(b.nome_completo);
+      case 'serie': {
+        const aNumero = parseInt(a.ano.match(/\d+/)?.[0] || '0');
+        const bNumero = parseInt(b.ano.match(/\d+/)?.[0] || '0');
+        if (aNumero !== bNumero) return aNumero - bNumero;
+        return a.turma.localeCompare(b.turma);
+      }
+      case 'faltas':
+        return b.total_faltas - a.total_faltas;
       case 'status': {
         const getPriority = (faltas: number) => {
           if (faltas >= 180) return 3;
@@ -149,7 +155,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         };
         return getPriority(b.total_faltas) - getPriority(a.total_faltas);
       }
-      default: return 0;
+      default:
+        return 0;
     }
   });
 
