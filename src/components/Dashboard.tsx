@@ -1,33 +1,29 @@
-import { useState, useEffect, useCallback } from 'react';
-import { GraduationCap, Users, FileText, LogOut, AlertTriangle, Plus, Menu, X, CheckCircle2, AlertCircle } from 'lucide-react';
-import { supabase, Student, getStudentStatus } from '../lib/supabase';
-import AddStudentModal from './AddStudentModal';
-import StudentList from './StudentList';
-import Reports from './Reports';
+import { useState, useEffect } from 'react';
+import { Download, Printer, BarChart3 } from 'lucide-react';
+import { supabase, Student, getStudentStatus, getStatusColor } from '../lib/supabase';
+import StudentDetailsModal from './StudentDetailsModal';
 
-type DashboardProps = {
-  onLogout: () => void;
-};
-
-export default function Dashboard({ onLogout }: DashboardProps) {
+export default function Reports() {
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterSerie, setFilterSerie] = useState('');
+  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
+  const [nameFilter, setNameFilter] = useState('');
+  const [serieTurmaFilter, setSerieTurmaFilter] = useState('');
   const [sortBy, setSortBy] = useState('nome');
-  const [currentView, setCurrentView] = useState<'students' | 'reports'>('students');
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [lastAbsenceDates, setLastAbsenceDates] = useState<Record<string, string>>({});
+  const [detailsStudent, setDetailsStudent] = useState<Student | null>(null);
 
-  // 1. loadStudents com useCallback para evitar re-renderizações desnecessárias
-  const loadStudents = useCallback(async () => {
+  useEffect(() => {
+    loadStudents();
+    loadLastAbsences();
+  }, []);
+
+  useEffect(() => {
+    filterStudents();
+  }, [students, nameFilter, serieTurmaFilter, sortBy]);
+
+  const loadStudents = async () => {
     try {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) throw new Error('Sessão expirada. Faça login novamente.');
-
       const { data, error } = await supabase
         .from('students')
         .select('*')
@@ -35,331 +31,374 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
       if (error) throw error;
       setStudents(data || []);
-    } catch (error: any) {
+      setFilteredStudents(data || []);
+    } catch (error) {
       console.error('Error loading students:', error);
-      setErrorMessage(error.message || 'Erro ao carregar lista de alunos.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    loadStudents();
-  }, [loadStudents]);
-
-  const handleAddStudent = async (studentData: { nome_completo: string; ano: string; turma: string }) => {
+  const loadLastAbsences = async () => {
     try {
-      setErrorMessage('');
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        setErrorMessage('Sessão expirada. Por favor, faça login novamente.');
-        return;
-      }
-
-      const newStudent = {
-        ...studentData,
-        user_id: user.id,
-        total_faltas: 0,
-        status: getStudentStatus(0)
-      };
-
-      const { error } = await supabase
-        .from('students')
-        .insert([newStudent]);
+      const { data, error } = await supabase
+        .from('absences')
+        .select('student_id, data_falta')
+        .order('data_falta', { ascending: false });
 
       if (error) throw error;
 
-      await loadStudents();
-      setShowAddModal(false);
-    } catch (error: any) {
-      setErrorMessage(`Erro ao adicionar: ${error.message}`);
-    }
-  };
+      const lastDates: Record<string, string> = {};
+      data?.forEach((absence) => {
+        if (!lastDates[absence.student_id]) {
+          lastDates[absence.student_id] = absence.data_falta;
+        }
+      });
 
-  const handleDeleteStudent = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este aluno?')) return;
-    
-    try {
-      const { error } = await supabase.from('students').delete().eq('id', id);
-      if (error) throw error;
-      await loadStudents();
-    } catch (error: any) {
-      setErrorMessage(`Erro ao excluir: ${error.message}`);
-    }
-  };
-
-  // 2. Função de Logout Sincronizada com o App.tsx
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
+      setLastAbsenceDates(lastDates);
     } catch (error) {
-      console.error('Erro ao sair do Supabase:', error);
-    } finally {
-      // Limpeza obrigatória de estados locais
-      localStorage.clear();
-      sessionStorage.clear();
-      onLogout(); // Avisa o App.tsx para desmontar o Dashboard
-      window.location.href = '/'; // Redireciona para a raiz de forma limpa
+      console.error('Error loading last absences:', error);
     }
   };
 
-  // --- Lógica de Filtros e Ordenação ---
-  const regularCount = students.filter(s => s.total_faltas <= 100).length;
-  const atencaoCount = students.filter(s => s.total_faltas >= 101 && s.total_faltas <= 179).length;
-  const criticoCount = students.filter(s => s.total_faltas >= 180).length;
+  const filterStudents = () => {
+    let filtered = students;
 
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = student.nome_completo.toLowerCase().includes(searchTerm.toLowerCase());
-
-    let matchesSerie = true;
-    if (filterSerie) {
-      const searchTerm = filterSerie.toLowerCase().trim();
-      const numero = student.ano.match(/\d+/)?.[0] || '';
-      const turma = student.turma.toLowerCase();
-
-      // Formatos possíveis: "6A", "6 A", "6º A", "6", "A"
-      const serieTurmaCompact = `${numero}${turma}`;
-      const serieTurmaWithSpace = `${numero} ${turma}`;
-      const serieTurmaWithDegree = `${numero}º ${turma}`;
-      const serieTurmaWithDegreeCompact = `${numero}º${turma}`;
-
-      matchesSerie = serieTurmaCompact.includes(searchTerm) ||
-                     serieTurmaWithSpace.includes(searchTerm) ||
-                     serieTurmaWithDegree.includes(searchTerm) ||
-                     serieTurmaWithDegreeCompact.includes(searchTerm) ||
-                     numero.includes(searchTerm) ||
-                     turma.includes(searchTerm);
+    if (nameFilter) {
+      filtered = filtered.filter((s) =>
+        s.nome_completo.toLowerCase().includes(nameFilter.toLowerCase())
+      );
     }
 
-    return matchesSearch && matchesSerie;
-  });
+    if (serieTurmaFilter) {
+      filtered = filtered.filter((s) => {
+        const searchTerm = serieTurmaFilter.toLowerCase().trim();
+        const numero = s.ano.match(/\d+/)?.[0] || '';
+        const turma = s.turma.toLowerCase();
 
-  const sortedStudents = [...filteredStudents].sort((a, b) => {
-    switch (sortBy) {
-      case 'nome':
-        return a.nome_completo.localeCompare(b.nome_completo);
-      case 'serie': {
-        const aNumero = parseInt(a.ano.match(/\d+/)?.[0] || '0');
-        const bNumero = parseInt(b.ano.match(/\d+/)?.[0] || '0');
-        if (aNumero !== bNumero) return aNumero - bNumero;
-        return a.turma.localeCompare(b.turma);
-      }
-      case 'faltas':
-        return b.total_faltas - a.total_faltas;
-      case 'status': {
-        const getPriority = (faltas: number) => {
-          if (faltas >= 180) return 3;
-          if (faltas >= 101) return 2;
-          return 1;
-        };
-        return getPriority(b.total_faltas) - getPriority(a.total_faltas);
-      }
-      default:
-        return 0;
+        // Formatos possíveis: "6A", "6 A", "6º A", "6", "A"
+        const serieTurmaCompact = `${numero}${turma}`;
+        const serieTurmaWithSpace = `${numero} ${turma}`;
+        const serieTurmaWithDegree = `${numero}º ${turma}`;
+        const serieTurmaWithDegreeCompact = `${numero}º${turma}`;
+
+        return serieTurmaCompact.includes(searchTerm) ||
+               serieTurmaWithSpace.includes(searchTerm) ||
+               serieTurmaWithDegree.includes(searchTerm) ||
+               serieTurmaWithDegreeCompact.includes(searchTerm) ||
+               numero.includes(searchTerm) ||
+               turma.includes(searchTerm);
+      });
     }
-  });
+
+    // Aplicar ordenação
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'nome':
+          return a.nome_completo.localeCompare(b.nome_completo);
+        case 'serie': {
+          const aNumero = parseInt(a.ano.match(/\d+/)?.[0] || '0');
+          const bNumero = parseInt(b.ano.match(/\d+/)?.[0] || '0');
+          if (aNumero !== bNumero) return aNumero - bNumero;
+          return a.turma.localeCompare(b.turma);
+        }
+        case 'faltas':
+          return b.total_faltas - a.total_faltas;
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredStudents(sorted);
+  };
+
+  const formatSeriesTurma = (ano: string, turma: string) => {
+    const numero = ano.match(/\d+/)?.[0] || ano;
+    return `${numero}${turma}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['Estudante', 'Série/Turma', 'Total Faltas', 'Status', 'Última Falta'];
+    const rows = filteredStudents.map((student) => [
+      student.nome_completo,
+      formatSeriesTurma(student.ano, student.turma),
+      student.total_faltas.toString(),
+      getStudentStatus(student.total_faltas),
+      formatDate(lastAbsenceDates[student.id] || ''),
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio-faltas-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDetailsClick = (student: Student) => {
+    setDetailsStudent(student);
+  };
+
+  const handleCloseDetailsModal = () => {
+    setDetailsStudent(null);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header com Mobile Menu integrado */}
-      <header className="bg-[#3D4A5C] text-white px-4 sm:px-6 py-4 shadow-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <GraduationCap className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
-            <h1 className="text-base sm:text-xl font-semibold truncate">
-              Controle de Faltas
-            </h1>
-          </div>
-          
-          <div className="hidden lg:flex items-center gap-4">
-            <nav className="flex gap-2">
-              <NavButton 
-                active={currentView === 'students'} 
-                onClick={() => setCurrentView('students')}
-                icon={<Users className="w-5 h-5" />}
-                label="Estudantes"
-              />
-              <NavButton 
-                active={currentView === 'reports'} 
-                onClick={() => setCurrentView('reports')}
-                icon={<FileText className="w-5 h-5" />}
-                label="Relatórios"
-              />
-            </nav>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium text-sm"
-            >
-              <LogOut className="w-4 h-4" /> Sair
-            </button>
-          </div>
-
-          <button className="lg:hidden p-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
-            {showMobileMenu ? <X /> : <Menu />}
-          </button>
+    <>
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-area,
+          #printable-area * {
+            visibility: visible;
+          }
+          #printable-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-simple {
+            font-size: 12px;
+          }
+          .print-simple table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .print-simple th,
+          .print-simple td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+          }
+          .print-simple th {
+            background-color: #f3f4f6;
+            font-weight: bold;
+          }
+        }
+      `}</style>
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 sm:mb-8 no-print">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Relatórios e Consultas</h1>
+          <p className="text-sm sm:text-base text-gray-600">Busque e analise dados de frequência dos estudantes</p>
         </div>
 
-        {/* Mobile Menu */}
-        {showMobileMenu && (
-          <div className="lg:hidden absolute top-full left-0 w-full bg-[#3D4A5C] border-t border-gray-600 p-4 shadow-xl">
-             <div className="flex flex-col gap-2">
-                <button onClick={() => {setCurrentView('students'); setShowMobileMenu(false)}} className="p-3 text-left hover:bg-gray-700 rounded">Estudantes</button>
-                <button onClick={() => {setCurrentView('reports'); setShowMobileMenu(false)}} className="p-3 text-left hover:bg-gray-700 rounded">Relatórios</button>
-                <button onClick={handleSignOut} className="p-3 text-left bg-red-600/20 text-red-400 rounded">Sair do Sistema</button>
-             </div>
+      <div className="bg-white rounded-lg shadow mb-6 p-4 sm:p-6 no-print">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Filtros de Busca</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+              Nome do Estudante
+            </label>
+            <input
+              type="text"
+              placeholder="Digite o nome..."
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent"
+            />
           </div>
-        )}
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {errorMessage && (
-          <div className="mb-6 bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              <span>{errorMessage}</span>
-            </div>
-            <button onClick={() => setErrorMessage('')}><X className="w-5 h-5" /></button>
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+              Série/Turma
+            </label>
+            <input
+              type="text"
+              placeholder="Digite a série/turma (ex: 6A, 7B)..."
+              value={serieTurmaFilter}
+              onChange={(e) => setSerieTurmaFilter(e.target.value)}
+              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent"
+            />
           </div>
-        )}
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+              Ordenar por
+            </label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent"
+            >
+              <option value="nome">Nome (A-Z)</option>
+              <option value="serie">Série e Turma</option>
+              <option value="faltas">Mais Faltas</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-        {currentView === 'students' ? (
-          <>
-            {/* Cards de Resumo */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <StatCard
-                label="Total de Estudantes"
-                value={students.length}
-                color="text-blue-600"
-                bgColor="bg-blue-50"
-                icon={<Users className="w-6 h-6" />}
-              />
-              <StatCard
-                label="Regular"
-                subtitle="0-100 faltas"
-                value={regularCount}
-                color="text-green-600"
-                bgColor="bg-green-50"
-                icon={<CheckCircle2 className="w-6 h-6" />}
-              />
-              <StatCard
-                label="Atenção"
-                subtitle="101-179 faltas"
-                value={atencaoCount}
-                color="text-yellow-600"
-                bgColor="bg-yellow-50"
-                icon={<AlertCircle className="w-6 h-6" />}
-              />
-              <StatCard
-                label="Crítico"
-                subtitle="≥180 faltas"
-                value={criticoCount}
-                color="text-red-600"
-                bgColor="bg-red-50"
-                icon={<AlertTriangle className="w-6 h-6" />}
-              />
+      <div id="printable-area" className="bg-white rounded-lg shadow">
+        <div className="p-4 sm:p-6 border-b border-gray-200 no-print">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Resultados da Busca</h2>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                onClick={handleExportCSV}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm font-medium"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Exportar CSV</span>
+                <span className="sm:hidden">CSV</span>
+              </button>
+              <button
+                onClick={handlePrint}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm font-medium"
+              >
+                <Printer className="w-4 h-4" />
+                <span className="hidden sm:inline">Imprimir</span>
+                <span className="sm:hidden">Print</span>
+              </button>
             </div>
+          </div>
+        </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">Lista de Chamada</h2>
-                  <p className="text-sm text-gray-500">Gerencie a frequência e dados dos alunos</p>
-                </div>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all shadow-sm font-semibold"
-                >
-                  <Plus className="w-5 h-5" /> Novo Aluno
-                </button>
+        <div className="p-4 sm:p-6 print-simple">
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-sm sm:text-base">Carregando...</p>
+            </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-sm sm:text-base">Nenhum estudante cadastrado ainda</p>
+            </div>
+          ) : (
+            <>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">
+                        Estudante
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">
+                        Série/Turma
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">
+                        Total Faltas
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 no-print">
+                        Detalhes
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 no-print">
+                        Status
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 no-print">
+                        Última Falta
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((student) => (
+                      <tr key={student.id} className="border-b border-gray-100">
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {student.nome_completo}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-700">
+                          {formatSeriesTurma(student.ano, student.turma)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-700">
+                          {student.total_faltas}
+                        </td>
+                        <td className="py-3 px-4 no-print">
+                          <button
+                            onClick={() => handleDetailsClick(student)}
+                            className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                          >
+                            <BarChart3 className="w-4 h-4" />
+                            Ver detalhes
+                          </button>
+                        </td>
+                        <td className="py-3 px-4 no-print">
+                          <span
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(getStudentStatus(student.total_faltas))}`}
+                          >
+                            {getStudentStatus(student.total_faltas)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-700 no-print">
+                          {formatDate(lastAbsenceDates[student.id] || '')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Filtros */}
-              <div className="p-4 bg-gray-50/50 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FilterInput label="Buscar Nome" placeholder="Ex: João Silva..." value={searchTerm} onChange={setSearchTerm} />
-                <FilterInput label="Filtrar Série/Turma" placeholder="Ex: 8º A..." value={filterSerie} onChange={setFilterSerie} />
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Ordenar por</label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              <div className="md:hidden space-y-3 no-print">
+                {filteredStudents.map((student) => (
+                  <div
+                    key={student.id}
+                    className="border border-gray-200 rounded-lg p-4"
                   >
-                    <option value="nome">Nome (A-Z)</option>
-                    <option value="serie">Série e Turma</option>
-                    <option value="faltas">Mais Faltas</option>
-                    <option value="status">Por Status (Crítico → Atenção → Regular)</option>
-                  </select>
-                </div>
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 text-sm mb-1">{student.nome_completo}</h4>
+                        <p className="text-xs text-gray-600">
+                          Série: {formatSeriesTurma(student.ano, student.turma)}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-block px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(getStudentStatus(student.total_faltas))}`}
+                      >
+                        {getStudentStatus(student.total_faltas)}
+                      </span>
+                    </div>
+                    <div className="space-y-2 mb-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Total de Faltas:</span>
+                        <span className="font-medium text-gray-900">{student.total_faltas}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Última Falta:</span>
+                        <span className="font-medium text-gray-900">
+                          {formatDate(lastAbsenceDates[student.id] || '')}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDetailsClick(student)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors text-sm font-medium"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      Ver detalhes
+                    </button>
+                  </div>
+                ))}
               </div>
+            </>
+          )}
+        </div>
+      </div>
 
-              <StudentList
-                students={sortedStudents}
-                loading={loading}
-                onDelete={handleDeleteStudent}
-                onUpdate={loadStudents}
-              />
-            </div>
-          </>
-        ) : (
-          <Reports />
-        )}
-      </main>
-
-      {showAddModal && (
-        <AddStudentModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddStudent}
+      {detailsStudent && (
+        <StudentDetailsModal
+          studentId={detailsStudent.id}
+          studentName={detailsStudent.nome_completo}
+          studentAno={detailsStudent.ano}
+          studentTurma={detailsStudent.turma}
+          onClose={handleCloseDetailsModal}
         />
       )}
     </div>
-  );
-}
-
-// Sub-componentes auxiliares para manter o código limpo
-function NavButton({ active, onClick, icon, label }: any) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all font-medium text-sm ${
-        active ? 'bg-white text-[#3D4A5C] shadow-sm' : 'hover:bg-[#4A5768] text-gray-200'
-      }`}
-    >
-      {icon} {label}
-    </button>
-  );
-}
-
-function StatCard({ label, subtitle, value, color, bgColor, icon }: any) {
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-700 mb-0.5">{label}</p>
-          {subtitle && (
-            <p className="text-xs text-gray-500 mb-2">{subtitle}</p>
-          )}
-          <p className={`text-3xl font-bold ${color}`}>{value}</p>
-        </div>
-        <div className={`${bgColor} p-3 rounded-lg ${color}`}>
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FilterInput({ label, placeholder, value, onChange }: any) {
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</label>
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-      />
-    </div>
+    </>
   );
 }
