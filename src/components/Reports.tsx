@@ -186,13 +186,21 @@ export default function Reports() {
           }
           .print-simple th,
           .print-simple td {
-            border: 1px solid #ddd;
-            padding: 8px;
+            border: 1px solid #333;
+            padding: 10px;
             text-align: left;
           }
           .print-simple th {
             background-color: #f3f4f6;
             font-weight: bold;
+          }
+          .print-only {
+            display: none;
+          }
+          @media print {
+            .print-only {
+              display: table-row !important;
+            }
           }
         }
       `}</style>
@@ -337,6 +345,28 @@ export default function Reports() {
                         <td className="py-3 px-4 text-sm text-gray-700 no-print">
                           {formatDate(lastAbsenceDates[student.id] || '')}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="hidden print-only">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Relatório de Faltas</h2>
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-gray-800">
+                      <th className="text-left py-2 px-3 text-sm font-bold">Nome</th>
+                      <th className="text-left py-2 px-3 text-sm font-bold">Série/Turma</th>
+                      <th className="text-left py-2 px-3 text-sm font-bold">Total de Faltas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((student) => (
+                      <tr key={student.id} className="border-b border-gray-300">
+                        <td className="py-2 px-3 text-sm">{student.nome_completo}</td>
+                        <td className="py-2 px-3 text-sm">{formatSeriesTurma(student.ano, student.turma)}</td>
+                        <td className="py-2 px-3 text-sm font-semibold">{student.total_faltas}</td>
                       </tr>
                     ))}
                   </tbody>
