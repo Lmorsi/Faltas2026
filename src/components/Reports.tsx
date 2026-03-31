@@ -290,7 +290,7 @@ export default function Reports() {
             </div>
           ) : (
             <>
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto no-print">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
@@ -351,7 +351,7 @@ export default function Reports() {
                 </table>
               </div>
 
-              <div className="hidden print-only">
+              <div className="hidden print-only w-full">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Relatório de Faltas</h2>
                 <table className="w-full">
                   <thead>
@@ -432,3 +432,4 @@ export default function Reports() {
     </>
   );
 }
+
