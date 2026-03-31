@@ -129,7 +129,8 @@ export default function StudentDetailsModal({
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const [year, month, day] = dateString.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     return date.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'long',
